@@ -1,0 +1,85 @@
+# Upstream's own ignore conventions, kept as they are. Nothing below the first
+# block is ours, and nothing in the second block removes an upstream entry to
+# make room for a fork-owned one.
+#
+# zlib's release tarball ships no `.gitignore` at all, so the entries in the
+# first block are upstream's *build system* outputs rather than upstream's
+# ignore file, and they are listed here so a `make`-produced object or archive
+# cannot be committed into a tree that is built with Zig instead. They are read
+# out of `src/Makefile.in`: `OBJZ`/`OBJG` at `:59-60` name the `.o` files,
+# `PIC_OBJZ`/`PIC_OBJG` at `:63-64` name the `.lo` files, and `:32-36` names
+# `STATICLIB=libz.a`, `SHAREDLIB=libz.so`, `SHAREDLIBV=libz.so.1.3.2` and
+# `SHAREDLIBM=libz.so.1`.
+*.o
+*.lo
+*.a
+*.so
+*.so.*
+*.la
+*.dylib
+*.dll
+*.obj
+*.lib
+*.exp
+*.pdb
+*.def.bak
+*.exe
+*.map.bak
+
+# Upstream's build-testing programs. `src/Makefile.in` links `minigzip` from
+# `src/test/minigzip.c` and `example` from `src/test/example.c` for its `test`
+# and `check` targets, and `infcover` from `src/test/infcover.c` for coverage.
+# This package compiles none of them -- they stay in `src/` digested and
+# unbuilt -- but a tree that ran upstream's `make test` must not commit them.
+/minigzip
+/minigzip.o
+/example
+/example.o
+/infcover
+/infcover.o
+/zconf.h.in.bak
+/zconf.h.bak
+/zlib.pc.bak
+
+# zig build artefacts (fork addition).
+#
+# These are directories rather than single files because a normal `zig build`
+# creates them, and a normal `zig build` must not dirty the tree or leak into
+# the package published from it. None of them is named in build.zig.zon
+# `.paths`, so an ignored directory can never become part of the package.
+.zig-cache/
+zig-out/
+# Zig 0.16 fetches dependencies into a project-local directory. This package
+# declares no dependencies, so this exists only so that a future one cannot
+# commit a fetched tree.
+zig-pkg/
+
+# The consumer package builds inside this repository and has its own cache and
+# output tree. It is ignored here as well as in consumer/.gitignore so a build
+# run from the repository root cannot commit it by accident.
+consumer/.zig-cache/
+consumer/zig-out/
+consumer/zig-pkg/
+
+# `smoke.zig` writes one gzip member into the working directory, reads it back
+# and deletes it with a `defer`. The entry is here so that a run interrupted
+# between the write and the delete -- a failed assertion, a Ctrl-C -- cannot
+# leave a stray member behind for the next commit to pick up.
+zlib-smoke-*.gz
+
+# Nix and devenv working-tree artefacts (fork addition).
+#
+# `nix build` writes `result` (and `result-1`, `result-2`, ... on a rebuild)
+# into the directory that asked for it, and `devenv` writes its resolved
+# inputs and its state beside the project. None of them is named in
+# build.zig.zon `.paths`, so an ignored path can never become part of the
+# package either. `devenv.lock` and `flake.lock` are deliberately *not* here:
+# they are real inputs, they belong to the driver, and ignoring them would be
+# the wrong way to keep a build out of a commit.
+result
+result-*
+.devenv/
+.devenv.flake.nix
+.devenv.flakes/
+devenv.local.nix
+.direnv/
