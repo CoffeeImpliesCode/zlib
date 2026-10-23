@@ -1,83 +1,31 @@
 // SPDX-License-Identifier: zlib
 .{
-    // The package id and the name a dependent writes in its dependency map,
-    // and the one registered module: `dep.module("zlib")`. All three are `zlib`,
-    // and `dep.artifact("zlib")` is the same string, which is what makes Zig emit
-    // `libz.a` - the name a C consumer's `-lz` needs, and upstream's own
-    // (`src/Makefile.in:38`, `STATICLIB=libz.a`).
+    // Package and module name.
     .name = .zlib,
-    // Upstream's own release string, read out of `src/zlib.h:44`
-    // (`#define ZLIB_VERSION "1.3.2"`) and `src/zlib.h:45`
-    // (`#define ZLIB_VERNUM 0x1320`), and out of `src/README:3`
-    // ("zlib 1.3.2 is a general purpose data compression library"). This is the
-    // version of the C library this package builds, not a version of the
-    // wrapper. `build.zig` compares it against the same constant and refuses to
-    // configure when the two disagree, so this string, the pkg-config
-    // `Version:` field and the shared object's file name cannot describe three
-    // different releases.
+    // Upstream zlib version.
     .version = "1.3.2",
-    // Derived once, by this package, from the bytes of the string
-    // "zlib-1.3.2-foundation-sdk" (sha256, first eight bytes, little-endian), so
-    // it is reproducible rather than a random number that nobody can check. It
-    // has to be distinct from every other package's in the dependency graph, and
-    // it is this package's own identity: changing it changes nothing about the
-    // code and changes how the toolchain decides two packages are the same.
+    // Package fingerprint.
     .fingerprint = 0x73887d3a9b651971,
     .minimum_zig_version = "0.16.0",
-    // Nothing is fetched: the C library is this repository's own source, and the
-    // facade, tests, example, consumer and runtime table import only what is
-    // compiled here. zlib's own release is the tarball already unpacked into
-    // `src/`.
     .dependencies = .{},
     .paths = .{
         "build.zig",
         "build.zig.zon",
-        // The cross-test harness profile for this package. It is a file in the
-        // package because it is how this package declares what its
-        // cross-platform gate is: `cross-test` discovers it by name from the
-        // package root, and it is settings only - the standard `zig build test`
-        // step over the full published platform matrix, no target subset and no
-        // host path. Nothing in build.zig reads it.
+        // cross-test profile.
         "cross-test.profile.sh",
-        // zig/root.zig is the typed facade and zig/translate.h the aggregate
-        // translation header. Both travel because a dependent reaches them
-        // through `dep.module("zlib")`.
+        // Zig facade and translation wrapper.
         "zig",
-        // Upstream's zlib, unmodified: the complete 1.3.2 release source
-        // closure - the nine units of `OBJZ`, the six of `OBJG`, both public
-        // headers, every internal header, the manual page, the pkg-config
-        // template, the two build systems upstream ships (`Makefile.in`,
-        // `configure`, `CMakeLists.txt`, `BUILD.bazel`, `MODULE.bazel`), the
-        // three RFCs in `doc/`, and every retained-but-uncompiled tree
-        // (`contrib/`, `test/`, `examples/`, `amiga/`, `msdos/`, `os400/`,
-        // `qnx/`, `watcom/`, `win32/`). The whole directory travels rather than
-        // a hand-picked file list so that the tree a dependent receives is
-        // upstream's tree: nothing here is edited, re-entered or regenerated,
-        // and a build that needed a file not in this closure would have to edit
-        // upstream to get it.
+        // Vendored upstream source tree.
         "src",
-        // The fixture set and its provenance record. `tests.zig` and
-        // `smoke.zig` `@embedFile` every one of these, and `consumer/src/
-        // main.zig` quotes two of the recorded checksums as literals, so a
-        // package that did not carry `fixtures/` would compile here and fail
-        // anywhere it was consumed. It is named as a directory because the
-        // payload, the two producer sets and the producer-version records move
-        // together; `fixtures/PROVENANCE.md` is what proves the set did not
-        // change, and `tools/check-provenance.sh` re-checks it.
+        // Test fixtures and provenance.
         "fixtures",
         "tests.zig",
         "smoke.zig",
-        // The separate consumer package: proof that the published module
-        // resolves from a package that did not write it, through a relative
-        // path rather than a fetch.
+        // Independent consumer package.
         "consumer/build.zig",
         "consumer/build.zig.zon",
         "consumer/src/main.zig",
-        // Upstream's release note, preserved byte for byte as the record it is,
-        // and the licence and provenance records this fork added around it.
-        // zlib's own grant is a standalone file, `src/LICENSE`, and is already
-        // in the closure above; the header block at `src/zlib.h:1-29` says the
-        // same thing and travels with the closure too.
+        // Upstream release note and package records.
         "README.upstream.md",
         "UPSTREAM.md",
         "UPSTREAM.sha256",
@@ -87,32 +35,15 @@
         "CHANGELOG.md",
         "FORK-NOTES.md",
         "FORK-LICENSE.md",
-        // The two tools: the per-target `zconf.h` generator the build runs, and
-        // the provenance script that checks the recorded digests and the exact
-        // upstream file set. `tools/genzconf.c` must travel because `build.zig`
-        // compiles it for the host on every configuration.
+        // Header generator and provenance checker.
         "tools",
-        // The runtime loader core the API role owns, and this library's
-        // generated dispatch and descriptor beside it. It is a dependency of the
-        // published module under `-Druntime`, so a dependent that fetches this
-        // package must receive it; `runtime/graph.zig` is the one place
-        // `createModule` substitutes for `translate.createModule()`.
+        // Runtime loader and dispatch.
         "runtime",
-        // Standalone Nix packaging. `package.nix` is the one source-only
-        // derivation and builds the `.static` and `.dynamic` variants of this
-        // same tree; `flake.nix` exposes them; `devenv.nix`, `devenv.yaml` and
-        // `.envrc` provide the canonical development shell. The lock files
-        // belong to the driver and are absent from this list until they exist:
-        // naming a path that is not there would make `zig fetch` hash a missing
-        // entry.
+        // Nix package and development shell configuration.
         "package.nix",
         "flake.nix",
         "devenv.nix",
         "devenv.yaml",
         ".envrc",
-        // .zig-cache/, zig-out/, zig-pkg/, consumer/.zig-cache/ and the Nix
-        // and devenv working-tree artefacts are deliberately absent: build
-        // outputs, a fetched package tree, a `result` symlink and shell state
-        // are not part of a package. See .gitignore.
     },
 }

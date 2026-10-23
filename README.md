@@ -1,414 +1,55 @@
-<!--
-SPDX-License-Identifier: zlib
-See FORK-LICENSE.md for what that identifier covers.
--->
+# zlib for Zig
 
-# zlib — 1.3.2, packaged for Zig 0.16
+This package builds upstream zlib 1.3.2 with Zig 0.16. It provides a typed Zig facade and the C library.
 
-This repository is zlib 1.3.2 with a Zig build graph, a typed Zig module, a
-runtime-loading route, a consumer package and a provenance gate around it.
+## Source deviations from upstream
 
-Upstream's own release note is preserved byte for byte as
-[`README.upstream.md`](README.upstream.md); it is upstream's text, not this
-project's, and this document does not replace it. Which upstream release this is
-and what was taken from it is [`UPSTREAM.md`](UPSTREAM.md). What this fork
-changed is [`CHANGELOG.md`](CHANGELOG.md).
+No file under `src/` is modified. The build generates a target-specific `zconf.h` from `src/zconf.h.in` and uses it instead of the unconfigured `src/zconf.h`.
 
-**Copyright (C) 1995-2026 Jean-loup Gailly and Mark Adler.** That is upstream's
-notice, not this fork's, and it travels with the source and with every installed
-artifact. `src/LICENSE:1-22`, verbatim:
+## Build deviations
 
-```
-Copyright notice:
+`build.zig` replaces upstream's `configure`, Make, CMake, Bazel, and platform makefiles. It compiles the 15 root source files in upstream's `OBJZ` and `OBJG` lists. It does not build upstream's `example` or `minigzip` programs.
 
- (C) 1995-2026 Jean-loup Gailly and Mark Adler
+## Support matrix
 
-  This software is provided 'as-is', without any express or implied
-  warranty.  In no event will the authors be held liable for any damages
-  arising from the use of this software.
+When no target is named, `zig build check` compiles the selected linkage for these targets. With `-Dtarget`, it checks only that target. The step compiles but does not run programs.
 
-  Permission is granted to anyone to use this software for any purpose,
-  including commercial applications, and to alter it and redistribute it
-  freely, subject to the following restrictions:
+| Target | Static | Shared |
+|---|:---:|:---:|
+| `x86_64-linux-gnu` | yes | yes |
+| `aarch64-linux-gnu` | yes | yes |
+| `aarch64-macos-none` | yes | yes |
+| `x86_64-windows-gnu` | yes | yes |
+| `riscv64-linux-gnu` | yes | yes |
+| `wasm32-wasi` | yes | no |
 
-  1. The origin of this software must not be misrepresented; you must not
-     claim that you wrote the original software. If you use this software
-     in a product, an acknowledgment in the product documentation would be
-     appreciated but is not required.
-  2. Altered source versions must be plainly marked as such, and must not be
-     misrepresented as being the original software.
-  3. This notice may not be removed or altered from any source distribution.
+Shared linkage requires a target with a dynamic linker. The build refuses it when the target has none.
 
-  Jean-loup Gailly        Mark Adler
-  jloup@gzip.org          madler@alumni.caltech.edu
-```
+## Consumption
 
-The same grant appears a second time as the header block of the public header
-at `src/zlib.h:1-29`; both copies are digested in `UPSTREAM.sha256` and both are
-installed. [`NOTICE.md`](NOTICE.md) is the per-file inventory and
-[`FORK-LICENSE.md`](FORK-LICENSE.md) the grant for this fork's own files.
+Add zlib to the dependent package's `build.zig.zon`:
 
-**Status of every gate in this repository: `PENDING-VERIFICATION`.** No build,
-test, smoke run, cross-target check or consumer run has been executed for this
-package by its author. Every digest, size, line number and file count below is
-`SOURCE-CONFIRMED`, read out of files in this tree; nothing here is a
-verification result, and the driver's own runs are recorded in the workspace
-ledger rather than in this file.
-
----
-
-## 1. Native-source deviations
-
-**None.** No file under `src/` has been edited, re-entered, reformatted or
-patched. All 254 files are upstream's, byte for byte, and every one is digested
-in [`UPSTREAM.sha256`](UPSTREAM.sha256).
-
-`UPSTREAM.sha256` records the digest of every file in `src/` and nothing else,
-and `tools/check-provenance.sh` checks three things about that record: the
-digests still match, the file set is *exactly* those 254 paths (so an addition
-is caught, which a checksum run alone cannot do), and the aggregate digest
-recorded in `UPSTREAM.md` matches the manifest.
-
-Retained but **not** compiled, deliberately:
-
-| Tree | Files | Why it is kept |
-|---|---:|---|
-| `src/contrib/` | 155 | upstream's contributed material. Two directories carry their own terms — see [`NOTICE.md`](NOTICE.md) |
-| `src/examples/` | 13 | upstream's eight example programs |
-| `src/test/` | 9 | upstream's build-testing programs. `minigzip` and `example` are what `src/README:11-14` points a user at |
-| `src/amiga/`, `src/msdos/`, `src/os400/`, `src/qnx/`, `src/watcom/`, `src/win32/` | 23 | upstream's platform build systems |
-
-### The one generated file, and why it is not a deviation
-
-`zconf.h` is **generated for the target being built**, by upstream's own
-generator `tools/genzconf.c`, which is in the tarball and is digested.
-
-`src/zconf.h.in` is the template. `src/zconf.h` also ships, pre-generated by
-upstream for a POSIX host — in this release the two are byte-identical, and
-`UPSTREAM.sha256` records the same digest for both. This package does not use
-the checked-in copy: `build.zig` puts the generated directory ahead of `src/` on
-four include lines, so the `#include "zconf.h"` at `src/zlib.h:37` resolves to
-the generated header for the target and never to upstream's.
-
-This matters for `HAVE_UNISTD_H` and `HAVE_STDARG_H`, which decide what the
-header declares. A copy generated on the machine running `zig build` would
-describe that machine, not the target, and a header generated for POSIX but
-compiled for Windows is a header that includes a header upstream's Windows path
-never expects (`src/zconf.h:488-490` reaches `<unistd.h>`). The generated header
-therefore belongs to the build cache and to no file in this tree.
-
-`zig build check` on `x86_64-windows-gnu` is the cell where the answer differs
-from the POSIX one, and the CI compiles that cell on purpose.
-
----
-
-## 2. Native-build deviations
-
-Upstream ships four build systems and this repository uses **none** of them:
-
-| Upstream's system | Where | Used here |
-|---|---|---|
-| `configure` + `Makefile.in` | `src/configure`, `src/Makefile.in` | no |
-| CMake | `src/CMakeLists.txt`, `src/zlibConfig.cmake.in` | no |
-| Bazel | `src/BUILD.bazel`, `src/MODULE.bazel` | no |
-| Platform makefiles | `src/win32/`, `src/msdos/`, `src/os400/`, `src/amiga/`, `src/watcom/`, `src/qnx/`, `src/make_vms.com` | no |
-
-`build.zig` compiles the same source list, read out of upstream rather than
-derived:
-
-* **`OBJZ` (9)** — `adler32.c crc32.c deflate.c infback.c inffast.c inflate.c
-  inftrees.c trees.c zutil.c` (`src/Makefile.in:59`)
-* **`OBJG` (6)** — `compress.c uncompr.c gzclose.c gzlib.c gzread.c gzwrite.c`
-  (`src/Makefile.in:60`)
-* **`OBJC` (15)** — the two concatenated (`src/Makefile.in:61`), which is what
-  `build.zig` compiles as `core_sources` plus `lib_sources`.
-
-### Deviations worth naming
-
-| Deviation | What | Why |
-|---|---|---|
-| **C dialect pinned** | `-std=gnu99` | Upstream's `configure` sets no `-std=` at all and inherits whatever the host compiler defaults to. `gnu99` rather than `c99` because `src/configure` itself passes GNU extensions to the compiler for its test programs. Pinning it makes the dialect a fact of the build rather than of the machine |
-| **No `configure`** | `HAVE_UNISTD_H` / `HAVE_STDARG_H` come from the target's `std.Target`, not from a configure run | A configure script runs once, on one machine, and bakes one machine's answer into a `zconf.h` for every target. Generating per target is what makes the six-target `check` matrix mean anything |
-| **No `Makefile` targets for `minigzip` / `example`** | neither program is compiled | They are upstream's *build*-testing programs. This package's tests are its own and rest on independent producers. Shipping them would be shipping a program upstream's own `install` rule does not install |
-| **No `zconf.h` from `src/`** | the generated one is used, per target | see above |
-| **No autotools, no CMake, no Bazel, no download** | `zig build install` is the whole build | one build graph, one installed layout, one thing to keep in agreement |
-
-### Artifact names are upstream's, not invented
-
-`src/Makefile.in:32-36`:
-
-```make
-STATICLIB=libz.a
-SHAREDLIB=libz.so
-SHAREDLIBV=libz.so.1.3.2
-SHAREDLIBM=libz.so.1
-```
-
-`build.zig` installs `libz.a` or `libz.so.1.3.2` with the `libz.so.1` soname,
-because `dep.artifact("zlib")` is what makes Zig emit `libz.a`, and `libz` is
-what a C consumer's `-lz` resolves. A wrapper's own naming would break both.
-
-### Installed layout
-
-`zig build install --prefix PREFIX` produces, and `nix build` produces the same
-tree by construction because it runs that same step:
-
-```
-PREFIX/lib/libz.a                          (or libz.so.1.3.2 + libz.so.1)
-PREFIX/include/zlib.h
-PREFIX/include/zconf.h                     the generated one, for the target
-PREFIX/lib/pkgconfig/zlib.pc
-PREFIX/share/man/man3/zlib.3
-PREFIX/share/licenses/zlib/                9 files, see below
-```
-
-`PREFIX/share/licenses/zlib/` holds `src/LICENSE`, `src/zlib.h`,
-`src/README`, `NOTICE.md`, `FORK-LICENSE.md`, `UPSTREAM.md`, `UPSTREAM.sha256`,
-`FORK-NOTES.md` and `CHANGELOG.md` — exactly `licence_records` in
-`build.zig:326-336`. Both of zlib's notices travel, because a package that ships
-a binary and neither text has removed an obligation.
-
-`src/zlib.3.pdf` is retained and digested but **not** installed, because
-upstream's install rule does not install it either: `src/Makefile.in:357-358`
-builds it only for the `docs` target, which needs `groff` and `ps2pdf`.
-
-### History of this port
-
-This is the first recorded state of this package. There is no earlier wave, no
-earlier receipt and no earlier packaging to carry forward. [`CHANGELOG.md`](CHANGELOG.md)
-is numbered from 1 and [`FORK-NOTES.md`](FORK-NOTES.md) records the decisions
-taken while building it.
-
----
-
-## 3. Support matrix
-
-### Build configurations
-
-| Option | Values | Default | What it selects |
-|---|---|---|---|
-| `-Dlinkage` | `static`, `dynamic` | `static` | **which artifact this build delivers and installs** |
-| `-Druntime` | `true`, `false` | `false` | **how the Zig facade reaches it**: a link line, or one process-lifetime table an explicit `load` fills |
-| `-Dsystem` | `true`, `false` | `false` | bind an installed `libz` instead of compiling `src/` |
-
-`-Dlinkage` and `-Druntime` are **orthogonal**. Under `-Druntime` nothing is
-linked into the facade module at all, so a caller may name a provider this tree
-did not build — and the artifact is still built and installed, so a caller may
-equally name the one it did.
-
-Two defaults, because the two modes had two. The bundled graph compiled a
-static archive before `-Dlinkage` existed and must keep doing so
-(`src/Makefile.in:38`); `linkSystemLibrary`'s own default is `.dynamic`, and
-system mode must keep that too. Deriving one from the other would silently
-change a consumer's linkage in the mode the option was not written for.
-
-### Steps
-
-| Step | What it does | `PENDING-VERIFICATION` |
-|---|---|---|
-| `zig build` | build and install the delivery tree | yes |
-| `zig build test` | run `tests.zig` — 27 behavioural tests | yes |
-| `zig build smoke` | run `smoke.zig`, the deterministic example | yes |
-| `zig build check` | compile the library, facade, tests and example for **six** targets, running nothing | yes |
-| `zig build consumer` | build or run `consumer/` as its own package | yes |
-
-### Cross-target matrix
-
-`zig build check` walks these six, in this order, when no `-Dtarget` is named
-(`build.zig:358-382`):
-
-| Target | Static | Shared | Note |
-|---|:--:|:--:|---|
-| `x86_64-linux-gnu` | yes | yes | the host |
-| `aarch64-linux-gnu` | yes | yes | |
-| `aarch64-macos-none` | yes | yes | Mach-O |
-| `x86_64-windows-gnu` | yes | yes | the cell where the generated `zconf.h` differs from the POSIX one |
-| `riscv64-linux-gnu` | yes | yes | |
-| `wasm32-wasi` | **yes** | **no — refused** | listed in `check_targets`; `deliveredLinkage` refuses a shared object on a target whose OS has no dynamic linker |
-
-Nothing is skipped and nothing is pre-judged. The `wasm32-wasi` shared refusal is
-asserted in CI as a *specific* documented failure, so the ledger can distinguish
-"refused for the right reason" from "failed for some other reason".
-
-### The published 53-platform matrix
-
-`cross-test`, run from the package root, builds **and runs** `tests.zig` for
-every platform in Zig 0.16.0's published Tier 1/2 table, using this repository's
-own build graph and `cross-test.profile.sh` for settings.
-
-It is **not** a CI job here and this repository does not pretend otherwise:
-`cross-test` is a host-local tool with its own runner detection and its own
-scratch policy. The command and its receipts belong in the workspace ledger.
-
-A foreign target with no executor on the host is recorded as `build_only`
-coverage — compiled, never executed, **never counted as a pass**. That
-distinction is what makes the other 52 cells mean anything, and it is the reason
-"the foreign compile succeeded" is never written as "the tests passed".
-
-#### Where that matrix stops, and why
-
-One run of it, `cross-test`, `zig build test -Dtarget=…`, `run_id
-20261005-191614-5696-213`, **exit 1**, produced 20 cells that executed 27/27
-tests, 19 cells that were compiled and **never executed**, no refused cell, no
-runtime failure, and 14 cells that failed to build. The counts are the
-harness's own: `status=fail pass=20 fail=14 build_only=0 partial=19`.
-
-All 14 failures are the **same step**, `zig translate-c` of `zig/translate.h`,
-and in every one of those logs `compile lib zlib Debug TARGET success` is also
-printed: zlib's fifteen translation units build for all 53 platforms and only
-the Zig facade's C translation does not. The causes are in Zig 0.16.0's aro and
-in toolchain headers this repository does not own:
-
-| Cells | Targets | Cause |
-|---|---|---|
-| 7 | `aarch64-netbsd`, `aarch64_be-netbsd`, `arm-netbsd`, `armeb-netbsd`, `powerpc-netbsd`, `x86-netbsd`, `x86_64-netbsd` | `generic-netbsd/sys/cdefs.h:413` lowers `_Pragma("GCC visibility pop")` into `#pragma GCC visibility pop`, which `lib/compiler/aro/aro/pragmas/gcc.zig:149-160` does not consume |
-| 2 | `mips-netbsd`, `mipsel-netbsd` | `mips-netbsd-eabi/machine/endian_machdep.h:8` needs `__MIPSEL__`/`__MIPSEB__`, which aro does not predefine |
-| 3 | `arm-openbsd`, `x86-openbsd`, `powerpc-openbsd` | `generic-openbsd/sys/types.h:171-174` guards `size_t` with `_SIZE_T_DEFINED_`; aro's `include/stddef.h:8` defines no such guard, so the two `typedef`s collide |
-| 2 | `mips64-openbsd`, `mips64el-openbsd` | `generic-openbsd/mips64/endian.h:39-41` needs `__MIPSEL__`/`__MIPSEB__` |
-
-This is a **recorded boundary**, not a silent skip: the cells stay in the
-matrix, keep failing, and are counted as failures. [`FORK-NOTES.md`](FORK-NOTES.md)
-§2.5 has the per-cell receipts. Nothing here claims zlib does not support these
-platforms — upstream's own `configure` is not what was run — and this run says
-nothing about `zig build`, `check`, `smoke` or `consumer/`.
-
-### System-library mode
-
-`-Dsystem=true` (or a runner's own `-fsys=zlib`) binds an installed `libz`
-through `b.systemIntegrationOption("zlib", …)` and translates **the installed
-headers**, not the bundled ones.
-
-That is the rule that `WISDOM.md` W14 exists for: bundled new-release headers
-against an older installed library compile and fail silently. `build.zig` has a
-per-platform include-order discipline for the generated `zconf.h` for the same
-reason. System mode is **not** part of this wave's gates and no system result
-may substitute for a source-package result; it is `PENDING-VERIFICATION` and
-needs a machine with an installed `libz` and its own headers.
-
----
-
-## 4. Consumption
-
-### As a Zig dependency
-
-```zig
-// build.zig.zon of the dependent
+```zon
 .dependencies = .{
-    .zlib = .{ .path = "../zlib" },   // or a registry/URL path of your own
+    .zlib = .{ .path = "../zlib" },
 },
 ```
 
+Use the module in the dependent's `build.zig`:
+
 ```zig
-// build.zig of the dependent
-const zlib_dep = b.dependency("zlib", .{ .target = target, .optimize = optimize });
-const zlib_mod = zlib_dep.module("zlib");
-
-const exe = b.addExecutable(.{
-    .name = "consumer",
-    .root_module = b.createModule(.{
-        .root_source_file = b.path("src/main.zig"),
-        .target = target,
-        .optimize = optimize,
-    }),
-});
-exe.root_module.addImport("zlib", zlib_mod);
-exe.linkLibrary(zlib_dep.artifact("zlib"));
-b.installArtifact(exe);
+const dep = b.dependency("zlib", .{ .target = target, .optimize = optimize });
+exe_mod.addImport("zlib", dep.module("zlib"));
 ```
 
-`dep.artifact("zlib")` is the static archive or the shared object, and
-`dep.module("zlib")` is the typed facade. Under `-Druntime` the module links no
-archive and `load` is how a provider is named.
+The module and artifact names are both `zlib`. `dep.module("zlib")` is the typed facade and carries the library in linked mode. `dep.artifact("zlib")` is the C library. C consumers use the installed `zlib.h`, generated `zconf.h`, and pkg-config name `zlib`. See [README.zig.md](README.zig.md) for facade declarations.
 
-[`README.zig.md`](README.zig.md) is the module's own reference.
+| Option | Values | Default | Effect |
+|---|---|---|---|
+| `-Dlinkage` | `static`, `dynamic` | `static` bundled; `dynamic` system | Selects the delivered artifact or system library linkage. ELF shared delivery uses `libz.so.1.3.2` with soname `libz.so.1`. |
+| `-Druntime` | `true`, `false` | `false` | Makes the facade resolve an explicitly loaded library at run time instead of linking it. |
+| `-Dsystem` | `true`, `false` | `false` | Uses an installed `libz` and its headers instead of the bundled source. The build runner's `-fsys=zlib` setting overrides this default. |
+| `-Dtarget` | Zig target triple | host | Selects the target. |
+| `-Doptimize` | Zig optimization mode | Zig default | Selects the optimization mode. |
 
-### As a C library
-
-The installed headers and `zlib.pc` are the whole of the C surface:
-
-```c
-#include <zlib.h>
-#include <assert.h>
-
-const char *text = "hello, world";
-unsigned char out[128];
-uLongf  out_len = sizeof out;
-
-assert(compress(out, &out_len, (const Bytef *)text, (uLong)13) == Z_OK);
-assert(uncompress(/* … */) == Z_OK);
-```
-
-```sh
-cc app.c $(pkg-config --cflags --libs zlib)
-```
-
-The `gz*` file layer is in the same library and the same archive; see the CI's
-`gz_gate.c`, which writes and reads a real member through the installed headers.
-
-### The consumer package in this repository
-
-`consumer/` is a **separate package with its own manifest**, reached through a
-relative path rather than a fetch. It exists to prove `dep.module("zlib")`
-resolves from a package that did not write it.
-
-It is also the **second** place the interoperation claim is made. `tests.zig`
-and `smoke.zig` make it from inside this package, where a bug in both the
-facade and the fixtures would be invisible; `consumer/src/main.zig` makes it
-from outside, re-checking the two checksums zlib **1.2.13** recorded and
-decoding a frame GNU **gzip 1.13** wrote. Neither is a round trip.
-
-```sh
-cd consumer && zig build run
-```
-
-### Running the gates
-
-```sh
-zig build
-zig build test                              # Debug
-zig build test -Doptimize=ReleaseSafe
-zig build smoke
-zig build check
-tools/check-provenance.sh
-cd consumer && zig build run
-```
-
-Or, with the canonical development environment:
-
-```sh
-devenv shell
-devenv tasks run sdk:test
-devenv tasks run sdk:consumer
-devenv tasks run sdk:provenance
-```
-
-`devenv.nix` is the canonical environment; `flake.nix` is its portable
-counterpart and both call the same `package.nix`, so the two entry points cannot
-describe different packages.
-
-### Scratch, not `/tmp`
-
-Neither the repositories nor `$HOME` may hold caches or build output. Export a
-cache directory on an approved scratch mount before running anything:
-
-```sh
-. "$HOME/.local/lib/host-scratch.sh" || exit 1
-zig build --cache-dir "$HOST_SCRATCH_ROOT/cache/foundation-libs/zlib"
-```
-
----
-
-## 5. What this repository does not claim
-
-* **No upstream test suite.** `src/test/` is upstream's build-testing programs,
-  not a test suite this package runs. Nothing is fetched to stand in for one.
-* **No committed SHA.** There is no release-tarball digest and no commit SHA in
-  `UPSTREAM.md`, because neither can be read out of anything in this tree. The
-  import aggregate over the 254 files can, and is recorded and checked.
-* **No gate result.** Nothing in this repository has been built, tested or
-  cross-compiled by its author. Every statement above is either
-  `SOURCE-CONFIRMED` from a file in this tree or `PENDING-VERIFICATION`.
-* **No licence narrowing.** `src/contrib/minizip/` is Info-ZIP and
-  `src/contrib/dotzlib/` is Boost-1.0, none of it is compiled, and
-  [`NOTICE.md`](NOTICE.md) inventories it. `tools/genzconf.c` is upstream's, not
-  this fork's, even though it lives in `tools/`.
+In bundled mode, static delivery produces `libz.a`. In runtime mode, the facade does not link an artifact; call `zlib.load` with the provider to use.
