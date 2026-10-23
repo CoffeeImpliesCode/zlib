@@ -66,7 +66,7 @@ fn headerString(comptime name: []const u8) [version_string_max:0]u8 {
     if (found.len >= version_string_max) @compileError(
         "zig/root.zig: " ++ name ++ " does not fit in version_string_max",
     );
-    var out: [version_string_max:0]u8 = .{0} ** version_string_max;
+    var out: [version_string_max:0]u8 = @splat(0);
     @memcpy(out[0..found.len], found);
     return out;
 }
@@ -216,19 +216,19 @@ pub const Error = error{
 
 /// Converts a raw zlib status code, returning `UnknownStatus` for unknown values.
 pub fn statusOf(code: c_int) Error!Status {
-    // Validate before `@enumFromInt` so unknown values become `UnknownStatus`.
+    // Validate before `@fromBackingInt` so unknown values become `UnknownStatus`.
     comptime var lowest: c_int = undefined;
     comptime var highest: c_int = undefined;
     comptime var first = true;
-    inline for (@typeInfo(Status).@"enum".fields) |field| {
-        const value: c_int = field.value;
+    inline for (@typeInfo(Status).@"enum".field_values) |field_value| {
+        const value: c_int = field_value;
         if (first or value < lowest) lowest = value;
         if (first or value > highest) highest = value;
         first = false;
     }
     if (code < lowest or code > highest) return Error.UnknownStatus;
-    const status: Status = @enumFromInt(code);
-    if (@intFromEnum(status) != code) return Error.UnknownStatus;
+    const status: Status = @fromBackingInt(@intCast(code));
+    if (@backingInt(status) != code) return Error.UnknownStatus;
     return status;
 }
 
@@ -343,7 +343,7 @@ pub fn compress2(dest: []u8, source: []const u8, options: CompressOptions) Error
         &dest_len,
         if (source.len == 0) no_source else source.ptr,
         @intCast(source.len),
-        @intFromEnum(options.level),
+        @backingInt(options.level),
     );
     try codeOrError(code);
     return @intCast(dest_len);
@@ -470,12 +470,12 @@ pub const Deflater = struct {
         errdefer self.* = .empty;
         const code = c.deflateInit2_(
             &self.stream,
-            @intFromEnum(options.level),
+            @backingInt(options.level),
             // `Z_DEFLATED` is an integer macro, not an enum tag.
             @intCast(c.Z_DEFLATED),
             format.windowBits(),
             @intCast(options.mem_level),
-            @intFromEnum(options.strategy),
+            @backingInt(options.strategy),
             version,
             @sizeOf(c.z_stream),
         );
@@ -489,7 +489,7 @@ pub const Deflater = struct {
         if (self.stream.state == null) return;
         const code = c.deflateEnd(&self.stream);
         self.stream = std.mem.zeroes(c.z_stream);
-        if (code != @intFromEnum(Status.ok)) {
+        if (code != @backingInt(Status.ok)) {
             std.debug.panic(
                 "zlib: deflateEnd returned {d} ({s}) for a stream this module " ++
                     "initialised and had not ended; that is a bug in the caller, " ++
@@ -519,7 +519,7 @@ pub const Deflater = struct {
         self.stream.next_out = output.ptr;
         self.stream.avail_out = @intCast(output.len);
 
-        const code = c.deflate(&self.stream, @intFromEnum(flush));
+        const code = c.deflate(&self.stream, @backingInt(flush));
         const consumed = input.len - @as(usize, @intCast(self.stream.avail_in));
         const produced = output.len - @as(usize, @intCast(self.stream.avail_out));
 
@@ -563,8 +563,8 @@ pub const Deflater = struct {
     pub fn params(self: *Deflater, level: Level, strategy: Strategy) Error!void {
         try codeOrError(c.deflateParams(
             &self.stream,
-            @intFromEnum(level),
-            @intFromEnum(strategy),
+            @backingInt(level),
+            @backingInt(strategy),
         ));
     }
 
@@ -638,7 +638,7 @@ pub const Inflater = struct {
         if (self.stream.state == null) return;
         const code = c.inflateEnd(&self.stream);
         self.stream = std.mem.zeroes(c.z_stream);
-        if (code != @intFromEnum(Status.ok)) {
+        if (code != @backingInt(Status.ok)) {
             std.debug.panic(
                 "zlib: inflateEnd returned {d} ({s}) for a stream this module " ++
                     "initialised and had not ended; that is a bug in the caller, " ++
@@ -668,7 +668,7 @@ pub const Inflater = struct {
         self.stream.next_out = output.ptr;
         self.stream.avail_out = @intCast(output.len);
 
-        const code = c.inflate(&self.stream, @intFromEnum(flush));
+        const code = c.inflate(&self.stream, @backingInt(flush));
         const consumed = input.len - @as(usize, @intCast(self.stream.avail_in));
         const produced = output.len - @as(usize, @intCast(self.stream.avail_out));
 
@@ -977,7 +977,7 @@ pub const Gzip = struct {
     /// Returns `Errno` on a file error.
     pub fn seek(self: *Gzip, distance: i64, origin: SeekOrigin) Error!i64 {
         const gz = self.require();
-        const at = c.gzseek(gz, @intCast(distance), @intFromEnum(origin));
+        const at = c.gzseek(gz, @intCast(distance), @backingInt(origin));
         if (at == -1) return error.Errno;
         return @intCast(at);
     }
@@ -1030,24 +1030,24 @@ pub const Gzip = struct {
     /// The message borrows handle storage until the next `gz*` call or close.
     pub fn lastError(self: *Gzip) ?GzipError {
         const gz = self.handle_ orelse return null;
-        var code: c_int = @intFromEnum(Status.ok);
+        var code: c_int = @backingInt(Status.ok);
         const raw = c.gzerror(gz, &code);
         const text = raw orelse return null;
-        if (code == @intFromEnum(Status.ok)) return null;
+        if (code == @backingInt(Status.ok)) return null;
         return .{ .message = std.mem.span(@as([*:0]const u8, @ptrCast(text))), .code = code };
     }
 
     /// Flushes buffered output using `mode`; returns `Error` on failure.
     pub fn flush(self: *Gzip, mode: Flush) Error!void {
         const gz = self.require();
-        try codeOrError(c.gzflush(gz, @intFromEnum(mode)));
+        try codeOrError(c.gzflush(gz, @backingInt(mode)));
     }
 
     /// Changes compression parameters for later writes.
     /// Returns `Error` if zlib cannot apply the change.
     pub fn setParams(self: *Gzip, level: Level, strategy: Strategy) Error!void {
         const gz = self.require();
-        try codeOrError(c.gzsetparams(gz, @intFromEnum(level), @intFromEnum(strategy)));
+        try codeOrError(c.gzsetparams(gz, @backingInt(level), @backingInt(strategy)));
     }
 
     /// Returns the handle or panics if this value owns no open file.
@@ -1060,10 +1060,10 @@ pub const Gzip = struct {
 
     /// Returns the error reported by `gzerror`, or `fallback` if none is recorded.
     fn reportedError(self: *Gzip, fallback: Error) Error {
-        var code: c_int = @intFromEnum(Status.ok);
+        var code: c_int = @backingInt(Status.ok);
         const raw = c.gzerror(self.require(), &code);
         _ = raw;
-        if (code == @intFromEnum(Status.ok)) return fallback;
+        if (code == @backingInt(Status.ok)) return fallback;
         // Unknown or unrecorded status codes use the supplied fallback.
         const status = statusOf(code) catch return fallback;
         return status.errorCode() orelse fallback;

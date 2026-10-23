@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-23
+
+- Port to Zig 0.17.0.
+- Parent `consumer` uses its own cache/prefix defaults and installs cross-target executables requiring external executors.
+
 ## 2026-10-05
 
 - Added upstream copyright and licence text to `README.md`.

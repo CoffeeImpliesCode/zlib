@@ -1,6 +1,6 @@
 # zlib for Zig
 
-This package builds upstream zlib 1.3.2 with Zig 0.16. It provides a typed Zig facade and the C library.
+This package builds upstream zlib 1.3.2 with Zig 0.17.0. It provides a typed Zig facade and the C library.
 
 ## Source deviations from upstream
 

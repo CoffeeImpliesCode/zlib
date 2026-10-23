@@ -193,9 +193,9 @@ pub fn main(init: std.process.Init) !void {
     var path_buffer: [256]u8 = undefined;
     // Use the process I/O random source to create a temporary file name.
     var random_source = std.Random.IoSource{ .io = io };
-    const path = try std.fmt.bufPrintZ(&path_buffer, "zlib-consumer-{d}.gz", .{
+    const path = try std.mem.printSentinel(&path_buffer, "zlib-consumer-{d}.gz", .{
         random_source.interface().int(u32),
-    });
+    }, 0);
     // File operations receive the process I/O instance explicitly.
     const cwd = std.Io.Dir.cwd();
     defer cwd.deleteFile(io, path) catch {};

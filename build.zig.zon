@@ -6,7 +6,7 @@
     .version = "1.3.2",
     // Package fingerprint.
     .fingerprint = 0x73887d3a9b651971,
-    .minimum_zig_version = "0.16.0",
+    .minimum_zig_version = "0.17.0",
     .dependencies = .{},
     .paths = .{
         "build.zig",

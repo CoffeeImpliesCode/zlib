@@ -23,8 +23,11 @@ The vendored `src/` tree is unmodified. The fork adds these implementation files
 - A host-built `genzconf` uses target properties to configure `zconf.h`; its output precedes `src/` in compile and translation include paths and is installed as the public header.
 - Bundled mode defaults to `libz.a`; dynamic mode uses upstream's `libz.so.1.3.2` name and `libz.so.1` soname, with the upstream ELF version script and COFF export list.
 - `-Dsystem` binds an installed `libz` and its headers. `-Dlinkage` selects static or dynamic linkage, while `-Druntime` independently selects generated runtime dispatch. Bundled mode defaults to static linkage; system mode defaults to dynamic.
+- Gzip paths in tests, smoke, and consumer programs use Zig 0.17's `std.mem.printSentinel` with a zero sentinel in place of `std.fmt.bufPrintZ`.
 
 ## Platform boundaries
 
 - Dynamic linkage is refused for targets without a dynamic linker; `wasm32-wasi` supports the static artifact only. Runtime loading also requires a platform dynamic loader.
 - With Zig 0.16, `translate-c` fails on these BSD targets in the toolchain headers: NetBSD `aarch64`, `aarch64_be`, `arm`, `armeb`, `powerpc`, `x86`, and `x86_64` encounter an unsupported GCC visibility pragma; NetBSD `mips` and `mipsel` lack the MIPS endian macros; OpenBSD `arm`, `x86`, and `powerpc` encounter a conflicting `size_t` definition; OpenBSD `mips64` and `mips64el` lack the MIPS endian macros. These are facade-translation boundaries, not changes to zlib's C sources.
+- Zig 0.17 does not expose parent cache, prefix, or libc-runtime CLI values to the nested consumer build; environment cache variables still propagate.
+- Nested consumer builds install cross-target executables requiring external executors because the 0.17 configurer does not expose executor toggles to its run/install choice.

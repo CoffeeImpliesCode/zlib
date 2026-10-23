@@ -224,7 +224,7 @@ pub fn main(init: std.process.Init) !void {
     // Exercise the gzip file API and inspect its header through `readHeader`.
     var path_buffer: [256]u8 = undefined;
     // Use the process ID for a temporary path; this process is its only writer.
-    const path = try std.fmt.bufPrintZ(&path_buffer, "zlib-smoke-{d}.gz", .{runTag()});
+    const path = try std.mem.printSentinel(&path_buffer, "zlib-smoke-{d}.gz", .{runTag()}, 0);
     // Each `Dir` operation receives the process I/O instance explicitly.
     defer std.Io.Dir.cwd().deleteFile(io, path) catch {};
 
@@ -316,7 +316,7 @@ fn uIntWidthCode() u32 {
 
 /// Returns a per-process temporary-file suffix across supported targets.
 fn runTag() u64 {
-    return switch (@import("builtin").os.tag) {
+    return switch (@import("builtin").target.os.tag) {
         .windows => @as(u64, std.os.windows.GetCurrentProcessId()),
         else => @intCast(std.c.getpid()),
     };

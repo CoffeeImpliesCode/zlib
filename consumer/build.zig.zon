@@ -14,7 +14,7 @@
     // package with a different name, and changing it has security and trust
     // implications.
     .fingerprint = 0xe49e67b05f28e789,
-    .minimum_zig_version = "0.16.0",
+    .minimum_zig_version = "0.17.0",
     .dependencies = .{
         // A relative path, not a registry or archive URL. The consumer is the
         // proof that `dep.module("zlib")` works from outside the package that

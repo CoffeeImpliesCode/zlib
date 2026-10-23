@@ -11,7 +11,7 @@ const testing = std.testing;
 
 /// Creates a per-process fixture name without target-specific PID types.
 fn runTag() u64 {
-    return switch (@import("builtin").os.tag) {
+    return switch (@import("builtin").target.os.tag) {
         .windows => @as(u64, std.os.windows.GetCurrentProcessId()),
         else => @intCast(std.c.getpid()),
     };
@@ -332,7 +332,7 @@ test "the gz file stream decodes the same gzip member to the same plaintext" {
 
     // Exercise `Gzip`'s file-layer read path.
     var path_buffer: [256]u8 = undefined;
-    const path = try std.fmt.bufPrintZ(&path_buffer, "zlib-test-{d}.gz", .{runTag()});
+    const path = try std.mem.printSentinel(&path_buffer, "zlib-test-{d}.gz", .{runTag()}, 0);
     // Tests use the process-wide single-threaded I/O instance.
     const io = std.Io.Threaded.global_single_threaded.io();
     defer std.Io.Dir.cwd().deleteFile(io, path) catch {};
@@ -484,7 +484,7 @@ test "inflateInit2 at 16 + MAX_WBITS reads a gzip stream, as src/Makefile.in:291
     var output: [512]u8 = undefined;
     stream.next_out = &output;
     stream.avail_out = @intCast(output.len);
-    const got = zlib.c.inflate(&stream, @intFromEnum(zlib.Flush.finish));
+    const got = zlib.c.inflate(&stream, @backingInt(zlib.Flush.finish));
     // src/zlib.h:182: Z_STREAM_END is how a complete member ends.
     try testing.expectEqual(@as(c_int, 1), got);
     try testing.expectEqual(plain.len, stream.total_out);
@@ -584,7 +584,7 @@ test "compressBound is an upper bound for every level and strategy" {
     var output: [4096]u8 = undefined;
     const levels = [_]zlib.Level{
         .no_compression, .best_speed, .best_compression, .default_compression,
-        @enumFromInt(2), @enumFromInt(6), @enumFromInt(8),
+        @fromBackingInt(@intCast(2)), @fromBackingInt(@intCast(6)), @fromBackingInt(@intCast(8)),
     };
     const strategies = [_]zlib.Strategy{ .default, .filtered, .huffman_only, .rle, .fixed };
 
