@@ -1,18 +1,8 @@
 .{
     .name = .zlib_consumer,
     .version = "0.1.0",
-    // This package's own identity, the value Zig 0.16.0 printed for this
-    // package name and manifest when the field was wrong. `zig build run` in
-    // this directory answered:
-    //
-    //     build.zig.zon:1:2: error: invalid fingerprint: 0x9c1f4b6a2d70e835;
-    //     if this is a new or forked package, use this value: 0xe49e67b05f28e789
-    //
-    // The previous value was not this package's, so the refusal was a
-    // mismatch by name rather than a silent identity reuse. It is separate
-    // from the library's fingerprint because a consumer is a different
-    // package with a different name, and changing it has security and trust
-    // implications.
+    // This consumer has a separate fingerprint because it has a different
+    // package name from the library.
     .fingerprint = 0xe49e67b05f28e789,
     .minimum_zig_version = "0.17.0",
     .dependencies = .{
