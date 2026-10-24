@@ -27,12 +27,10 @@ Shared linkage requires a target with a dynamic linker. The build refuses it whe
 
 ## Consumption
 
-Add zlib to the dependent package's `build.zig.zon`:
+Fetch zlib from GitHub and save its pinned URL and hash to the consumer's `build.zig.zon`:
 
-```zon
-.dependencies = .{
-    .zlib = .{ .path = "../zlib" },
-},
+```sh
+zig fetch --save git+https://github.com/CoffeeImpliesCode/zlib#v1.3.2
 ```
 
 Use the module in the dependent's `build.zig`:
