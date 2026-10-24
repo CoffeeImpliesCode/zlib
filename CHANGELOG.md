@@ -1,5 +1,10 @@
 # Changelog
 
+- Pass the source-length pointer to `uncompress2` during runtime provider validation, fixing loads with static or shared artifact linkage.
+- Split runtime symbol lists on commas and ASCII whitespace; add search-prefix library directories to system-header translation for static and shared linkage.
+- Share runtime header modules, compile runtime tests/smoke/consumer in `check`, and bind system consumers to installed `libzlib` with forwarded search prefixes and matching pkg-config metadata.
+- Exclude targets without a dynamic loader from default shared-linkage and runtime-loading checks, allowing native shared builds and provider installs.
+
 ## 2026-10-23
 
 - Port to Zig 0.17.0.

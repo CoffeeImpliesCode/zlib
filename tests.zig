@@ -246,6 +246,12 @@ fn inflateGzip(bytes: []const u8, output: []u8) !usize {
     return step.produced;
 }
 
+test "runtime provider round-trip validation completes before publication" {
+    if (comptime !zlib.runtime_loaded) return;
+    nativeReady();
+    try testing.expect(zlib.loadedSource() != null);
+}
+
 // Decode GNU gzip fixtures and check their headers and trailers against RFC 1952.
 test "GNU gzip 1.13 members decode to the recorded plaintext, header fields per RFC 1952" {
     nativeReady();
@@ -583,7 +589,7 @@ test "compressBound is an upper bound for every level and strategy" {
 
     var output: [4096]u8 = undefined;
     const levels = [_]zlib.Level{
-        .no_compression, .best_speed, .best_compression, .default_compression,
+        .no_compression,              .best_speed,                  .best_compression,            .default_compression,
         @fromBackingInt(@intCast(2)), @fromBackingInt(@intCast(6)), @fromBackingInt(@intCast(8)),
     };
     const strategies = [_]zlib.Strategy{ .default, .filtered, .huffman_only, .rle, .fixed };

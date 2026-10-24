@@ -101,8 +101,7 @@ pub fn Config(comptime dispatch: type) type {
         /// Checks provider version, flags, round-trip behavior, and bounds.
         /// Returns a refusal reason; the loader closes the candidate before publication.
         pub fn validate(dst: *const table) ?[]const u8 {
-            const expected = expected_version orelse return
-                "the embedded src/zlib.h has no ZLIB_VERSION definition, so this " ++
+            const expected = expected_version orelse return "the embedded src/zlib.h has no ZLIB_VERSION definition, so this " ++
                 "loader cannot state what it expects a provider to report";
 
             // Require the provider version to start with the embedded header version.
@@ -184,7 +183,7 @@ pub fn Config(comptime dispatch: type) type {
             // A sentinel detects success without writing the expected payload.
             var plain: [probe_input_len]u8 = @splat(0xa5);
             var plain_len: c_ulong = @intCast(probe_input_len);
-            const read = dst.uncompress2(&plain, &plain_len, &compressed, compressed_len);
+            const read = dst.uncompress2(&plain, &plain_len, &compressed, &compressed_len);
             if (read != 0) {
                 std.debug.print(
                     "zlib: uncompress2 through the provider returned {d}\n",

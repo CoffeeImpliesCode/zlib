@@ -250,10 +250,8 @@ pub fn main(init: std.process.Init) !void {
 
     // Compare facade routing with raw symbol access and the embedded header version.
     // This detects provider mismatches between the dispatch and translated declarations.
-    try checkString(w, "route check: facade and raw escape hatch agree",
-        try rawVersion(), zlib.zlibVersion());
-    try checkString(w, "route check: the provider matches these headers",
-        zlib.zlibVersion(), zlib.version);
+    try checkString(w, "route check: facade and raw escape hatch agree", try rawVersion(), zlib.zlibVersion());
+    try checkString(w, "route check: the provider matches these headers", zlib.zlibVersion(), zlib.version);
 
     // Call a translated declaration that the typed facade does not wrap.
     var stream: zlib.c.z_stream = std.mem.zeroes(zlib.c.z_stream);

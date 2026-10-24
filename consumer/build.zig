@@ -16,7 +16,7 @@ pub fn build(b: *std.Build) void {
     const linkage = b.option(
         std.lang.LinkMode,
         "linkage",
-        "Which delivery of libz to check. Forwarded to the dependency; it " ++
+        "Which delivery of libzlib to check. Forwarded to the dependency; it " ++
             "decides the artifact, never anything in this package.",
     ) orelse .static;
     const runtime_loaded = b.option(

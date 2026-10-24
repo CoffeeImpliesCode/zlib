@@ -128,13 +128,45 @@ fn addNames(
     set: *std.StringHashMapUnmanaged(void),
     list: []const u8,
 ) std.mem.Allocator.Error!void {
-    var parts = std.mem.splitScalar(u8, list, ',');
-    while (parts.next()) |part| {
-        // Trim line breaks so wrapped name lists retain their entries.
-        const name = std.mem.trim(u8, part, " \t\r\n");
-        if (name.len == 0) continue;
+    var parts = std.mem.tokenizeAny(u8, list, ", \t\r\n\x0b\x0c");
+    while (parts.next()) |name| {
         try set.put(arena, name, {});
     }
+}
+
+test "route lists accept commas and ASCII whitespace" {
+    const allocator = std.testing.allocator;
+    var options = try Options.parse(allocator, &.{
+        "generate",
+        "--library",
+        "zlib",
+        "--translate",
+        "translated.zig",
+        "--output",
+        "dispatch.zig",
+        "--noise",
+        ", read write,\tclose\r\nmemcpy\x0bmemset\x0cstrlen,,read, ",
+        "--optional",
+        "optional_a optional_b,optional_c",
+        "--exclude",
+        "excluded_a,\nexcluded_b excluded_c",
+    });
+    defer options.noise.deinit(allocator);
+    defer options.optional.deinit(allocator);
+    defer options.exclude.deinit(allocator);
+
+    try std.testing.expectEqual(@as(u32, 6), options.noise.count());
+    for ([_][]const u8{ "read", "write", "close", "memcpy", "memset", "strlen" }) |name| {
+        try std.testing.expectEqual(Options.Route.direct, options.routeOf(name));
+    }
+    for ([_][]const u8{
+        "optional_a", "optional_b", "optional_c",
+        "excluded_a", "excluded_b", "excluded_c",
+    }) |name| {
+        try std.testing.expectEqual(Options.Route.optional, options.routeOf(name));
+    }
+    try std.testing.expectEqual(Options.Route.routed, options.routeOf("deflate"));
+    try std.testing.expect(!options.noise.contains(""));
 }
 
 /// Import name the patched translation uses for the dispatch.
@@ -211,7 +243,7 @@ fn generate(
     options: Options,
 ) Failure!struct { dispatch: []const u8, native: []const u8 } {
     const source_z = try readSentinel(io, arena, options.translate);
-    var tree = try Ast.parse(arena, source_z, .zig);
+    var tree = try Ast.parse(arena, source_z, .{ .mode = .zig });
     defer tree.deinit(arena);
 
     if (tree.errors.len != 0) {
@@ -553,9 +585,7 @@ fn planVariable(
                 const type_last = tree.lastToken(type_node);
                 // Avoid `@TypeOf` on `@extern`, which can create a direct link.
                 // Preserve the declared pointer type and translated nominal types.
-                decl.field_type = tree.source[
-                    tree.tokenStart(type_first)..tree.tokenStart(type_last) + tree.tokenSlice(type_last).len
-                ];
+                decl.field_type = tree.source[tree.tokenStart(type_first) .. tree.tokenStart(type_last) + tree.tokenSlice(type_last).len];
                 decl.address_value = true;
                 return decl;
             }
@@ -597,9 +627,7 @@ fn dataTypeText(
         );
         return error.UnsupportedDeclaration;
     };
-    const text = tree.source[
-        tree.tokenStart(tree.firstToken(type_node))..tree.tokenStart(last)
-    ];
+    const text = tree.source[tree.tokenStart(tree.firstToken(type_node))..tree.tokenStart(last)];
     if (std.mem.indexOfScalar(u8, text, '=') != null) {
         std.debug.print(
             "runtime/generate.zig: extern '{s}' is initialized; an exported object " ++

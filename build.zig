@@ -84,7 +84,7 @@ const licence_records = [_][]const u8{
 /// C dialect used for upstream translation units.
 const c_flags = [_][]const u8{"-std=gnu99"};
 
-/// Which `libz` the package links.
+/// Selects the bundled or installed C library.
 const Library = enum {
     bundled,
     system,
@@ -196,7 +196,15 @@ fn addGraph(
         .link_libc = true,
     });
 
-    // The generated `zconf.h` directory comes FIRST, before `src/`.
+    if (library == .system) {
+        for (b.graph.search_prefixes.items) |prefix| {
+            translate.addIncludePath(.{ .cwd_relative = b.pathJoin(&.{ prefix, "include" }) });
+            // TranslateC does not inherit the maker's compile-step library search paths.
+            translate.addCFlags(&.{ "-L", b.pathJoin(&.{ prefix, "lib" }) });
+        }
+    }
+
+    // Bundled translation uses generated zconf.h before src/.
     translate.addIncludePath(zconf.dirname());
     if (library == .bundled) {
         translate.addIncludePath(b.path(source_dir));
@@ -205,7 +213,12 @@ fn addGraph(
     }
 
     if (library == .system) {
-        translate.linkSystemLibrary(lib_name, .{ .preferred_link_mode = linkage });
+        // Host zlib.pc names libz, while this package installs libzlib.
+        translate.linkSystemLibrary(lib_name, .{
+            .preferred_link_mode = linkage,
+            .search_strategy = .no_fallback,
+            .use_pkg_config = .no,
+        });
     }
 
     const module = if (public)
@@ -223,15 +236,16 @@ fn addGraph(
             .link_libc = true,
         });
 
-    graph.addHeaderImport(b, module);
+    const header = graph.createHeaderModule(b);
+    module.addImport("zlib_header", header);
     // Share one loader core per build; LoadSource and LoadError have nominal identity.
     if (runtime_loaded) {
         // Runtime mode dispatches through a provider without linking this artifact.
-        module.addImport("c", graph.createModule(b, translate, target, optimize));
+        module.addImport("c", graph.createModule(b, translate, target, optimize, header));
     } else {
         // Keep c private; consumers import it through the zlib facade.
         module.addImport("c", translate.createModule());
-        module.addImport("rt", graph.createCoreModule(b, target, optimize));
+        module.addImport("rt", graph.createCoreModule(b, target, optimize, header));
         if (c_lib) |lib| module.linkLibrary(lib);
     }
 
@@ -321,7 +335,7 @@ fn setVersionScript(
     c_lib.setVersionScript(files.add("zlib.map", @embedFile("src/zlib.map")));
 }
 
-/// Compiles the library, facade, tests, and example for one target without running them.
+/// Compiles the library, tests, smoke, and consumer for one target without running them.
 fn add_target_check(
     b: *std.Build,
     step: *std.Build.Step,
@@ -360,6 +374,17 @@ fn add_target_check(
         .root_module = example_mod,
     }).step);
 
+    const consumer_mod = b.createModule(.{
+        .root_source_file = b.path("consumer/src/main.zig"),
+        .target = cross_target,
+        .optimize = optimize,
+    });
+    consumer_mod.addImport(lib_name, cross.module);
+    step.dependOn(&b.addExecutable(.{
+        .name = b.fmt("zlib-consumer-{s}", .{triple}),
+        .root_module = consumer_mod,
+    }).step);
+
     if (cross.c_lib != null) {
         step.dependOn(&cross.c_lib.?.step);
     }
@@ -391,6 +416,10 @@ fn runConsumer(
     run.addArg(b.fmt("-Dlinkage={s}", .{@tagName(linkage)}));
     run.addArg(b.fmt("-Druntime={s}", .{if (runtime_loaded) "true" else "false"}));
     run.addArg(if (library == .system) b.fmt("-fsys={s}", .{lib_name}) else b.fmt("-fno-sys={s}", .{lib_name}));
+    for (b.graph.search_prefixes.items) |prefix| {
+        run.addArg("--search-prefix");
+        run.addDirectoryArg2(.{ .cwd_relative = prefix }, .{ .make_absolute = true });
+    }
     run.addThirdPartyEnabledArgDarling(.{ .enabled = "-fdarling" });
     run.addThirdPartyEnabledArgQemu(.{ .enabled = "-fqemu" });
     run.addThirdPartyEnabledArgRosetta(.{ .enabled = "-frosetta" });
@@ -446,7 +475,7 @@ fn add_pkg_config(
             \\License: Zlib
             \\
             \\Requires:
-            \\Libs: -L${{libdir}} -L${{sharedlibdir}} -lz
+            \\Libs: -L${{libdir}} -L${{sharedlibdir}} -lzlib
             \\Cflags: -I${{includedir}}{s}
             \\
         , .{
@@ -485,10 +514,13 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    // Forwarding search prefixes observes CLI values outside the configuration cache key.
+    b.graph.poisonCache();
+
     const system_default = b.option(
         bool,
         "system",
-        "Bind an installed libz instead of compiling src/, and translate the " ++
+        "Bind an installed libzlib instead of compiling src/, and translate the " ++
             "installed headers instead of the bundled ones. This supplies the " ++
             "default of systemIntegrationOption(\"zlib\"); a build runner that " ++
             "decides the mode itself (-fsys=zlib) overrides it.",
@@ -500,14 +532,8 @@ pub fn build(b: *std.Build) void {
     const linkage_option = b.option(
         std.lang.LinkMode,
         "linkage",
-        "Deliver the native library as a static archive (the default, and " ++
-            "upstream's own STATICLIB at src/Makefile.in:38) or as a real " ++
-            "shared object with upstream's libz.so.1.3.2 file name and " ++
-            "libz.so.1 soname. This selects the delivery and never the " ++
-            "dispatch: the same 15 C units are compiled either way. In system " ++
-            "mode this graph builds no artifact at all, so there the option " ++
-            "names the kind of installed library to bind to instead, and it " ++
-            "defaults to dynamic.",
+        "Select static or dynamic delivery of libzlib; system mode selects " ++
+            "the installed library linkage and defaults to dynamic.",
     );
 
     // Preserve static bundled and dynamic system defaults.
@@ -579,23 +605,45 @@ pub fn build(b: *std.Build) void {
     });
     const run_tests = b.addRunArtifact(unit_tests);
     run_tests.has_side_effects = true;
-    b.step("test", "Run the behavioural tests").dependOn(&run_tests.step);
+    const test_step = b.step("test", "Run the behavioural and runtime-generator tests");
+    test_step.dependOn(&run_tests.step);
+
+    const generator_tests = b.addTest(.{
+        .name = "zlib-runtime-generator-tests",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("runtime/generate.zig"),
+            .target = b.graph.host,
+            .optimize = optimize,
+        }),
+    });
+    test_step.dependOn(&b.addRunArtifact(generator_tests).step);
 
     b.step("consumer", "Build or run the consumer/ package for the selected target")
         .dependOn(&runConsumer(b, target, optimize, library, deliveredLinkage(target, linkage), runtime_loaded).step);
 
-    // Compile the library, facade, tests, and example for each check target.
+    // Installed libraries and headers support only their selected target.
     const check_step = b.step(
         "check",
-        "Compile the native library, the facade, the tests and the example for " ++
-            "the six check targets without running any of them",
+        "Compile the library, tests, smoke, and consumer for supported check targets",
     );
-    if (!target.query.isNative()) {
+    check_step.dependOn(&generator_tests.step);
+    if (library == .system or !target.query.isNative()) {
         add_target_check(b, check_step, target.query, optimize, library, linkage, runtime_loaded);
     } else {
         for (check_targets[0..]) |query| {
+            if ((linkage == .dynamic or runtime_loaded) and
+                !targetHasDynamicLinker(b.resolveTargetQuery(query))) continue;
             add_target_check(b, check_step, query, optimize, library, linkage, runtime_loaded);
         }
+    }
+
+    if (targetHasDynamicLinker(target)) {
+        const runtime_check = b.step(
+            "check-runtime",
+            "Compile runtime-loaded tests, smoke, and consumer without a provider",
+        );
+        add_target_check(b, runtime_check, target.query, optimize, library, linkage, true);
+        check_step.dependOn(runtime_check);
     }
 
     if (published.c_lib != null) {
@@ -610,19 +658,15 @@ pub fn build(b: *std.Build) void {
                 @intFromBool(published.platform.have_stdarg_h),
             },
         );
-        std.debug.print("zlib: {s}\n", .{switch (deliveredLinkage(target, linkage)) {
-            .static => "static archive libz.a (default, and upstream's STATICLIB)",
-            .dynamic => b.fmt(
-                "shared object libz.so.{d}.{d}.{d}, soname libz.so.{d}, " ++
-                    "export surface from src/zlib.map (ELF) or src/win32/zlib.def (COFF)",
-                .{
-                    abi_version.major,
-                    abi_version.minor,
-                    abi_version.patch,
-                    abi_version.major,
-                },
-            ),
-        }});
+        std.debug.print("zlib: {s} {s}\n", .{
+            if (linkage == .static) "static archive" else "shared library",
+            published.c_lib.?.out_filename,
+        });
+        if (linkage == .dynamic and target.result.ofmt == .elf) {
+            std.debug.print("zlib: soname libzlib.so.{d}; exports from src/zlib.map\n", .{
+                abi_version.major,
+            });
+        }
         if (runtime_loaded) {
             std.debug.print(
                 "zlib: runtime-loaded dispatch (-Druntime=true); the facade module " ++
@@ -643,7 +687,7 @@ pub fn build(b: *std.Build) void {
         }
     } else {
         std.debug.print(
-            "zlib: system libz (-lz) and the installed headers; this package " ++
+            "zlib: system libzlib (-lzlib) and the installed headers; this package " ++
                 "installs nothing of its own\n",
             .{},
         );

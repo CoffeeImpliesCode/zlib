@@ -12,7 +12,7 @@ const std = @import("std");
 const sync_prefix = "zlib_rt";
 
 /// Reasoned system-header superset, not a `translate-c` inventory; over-listing is harmless.
-/// Omitting emitted names may cause `MissingSymbol`; keep a trailing comma on every line.
+/// Omitting emitted names may cause `MissingSymbol`; commas and ASCII whitespace separate names.
 const libc_noise =
     \\DllMain _Exit _Fork _OSSwapInt16 _OSSwapInt32 _OSSwapInt64,
     \\__FreeBSD_libc_enter_restricted_mode __bswap16 __bswap32 __bswap64 __bswap_16 __bswap_32,
@@ -121,6 +121,7 @@ pub fn createCoreModule(
     b: *std.Build,
     target: std.Build.ResolvedTarget,
     optimize: std.lang.Optimize,
+    header: *std.Build.Module,
 ) *std.Build.Module {
     const core = b.createModule(.{
         .root_source_file = b.path("runtime/loader.zig"),
@@ -129,20 +130,19 @@ pub fn createCoreModule(
         // The Unix backend uses libc's `dlopen`; linked builds do not use this module.
         .link_libc = true,
     });
-    addHeaderImport(b, core);
+    core.addImport("zlib_header", header);
     return core;
 }
 
-/// Makes `src/zlib.h` available as `zlib_header` from a module-local copy.
-/// The build output avoids package-boundary restrictions without changing sources.
-pub fn addHeaderImport(b: *std.Build, module: *std.Build.Module) void {
+/// Creates the header module shared by the facade, loader, and provider checks.
+pub fn createHeaderModule(b: *std.Build) *std.Build.Module {
     const files = b.addWriteFiles();
     const root = files.add("zlib_header.zig",
         \\pub const bytes = @embedFile("zlib.h");
         \\
     );
     _ = files.addCopyFile(b.path("src/zlib.h"), "zlib.h");
-    module.addAnonymousImport("zlib_header", .{
+    return b.createModule(.{
         .root_source_file = root,
     });
 }
@@ -153,8 +153,9 @@ pub fn createModule(
     translate: *std.Build.Step.TranslateC,
     target: std.Build.ResolvedTarget,
     optimize: std.lang.Optimize,
+    header: *std.Build.Module,
 ) *std.Build.Module {
-    const core = createCoreModule(b, target, optimize);
+    const core = createCoreModule(b, target, optimize, header);
 
     const library = b.createModule(.{
         .root_source_file = b.path("runtime/library.zig"),
@@ -162,7 +163,7 @@ pub fn createModule(
         .optimize = optimize,
     });
     library.addImport("rt", core);
-    addHeaderImport(b, library);
+    library.addImport("zlib_header", header);
 
     return createDispatchModule(b, translate, target, optimize, core, library);
 }
