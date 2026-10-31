@@ -3,6 +3,7 @@
 
 //! Deterministic facade checks use RFC values, recorded fixtures, and provider/file results.
 //! Checks cover checksums, formats, streaming, gzip files, and raw C access; mismatches exit non-zero.
+//! Fixture producer versions and digests are recorded in fixtures/PROVENANCE.md.
 //! Runtime builds require an explicit provider path; linked builds need none.
 
 const std = @import("std");

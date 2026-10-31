@@ -42,6 +42,7 @@
         // Nix package and development shell configuration.
         "package.nix",
         "flake.nix",
+        "flake.lock",
         "devenv.nix",
         "devenv.yaml",
         ".envrc",

@@ -53,3 +53,34 @@ The module and artifact names are both `zlib`. `dep.module("zlib")` is the typed
 In bundled mode, static delivery produces `libzlib.a`. In runtime mode, the facade does not link an artifact; call `zlib.load` with the provider to use.
 
 System mode requires this package's installed artifact and headers for the selected target. Supply its prefix with `--search-prefix <path>`; translation and linking search `<path>/include` and `<path>/lib`. The nested `consumer` build forwards all search prefixes. System linking bypasses host `zlib.pc`, which can select a different `libz`. Search-prefix forwarding disables configuration caching under Zig 0.17.
+
+## Licence
+
+Upstream zlib 1.3.2 is Copyright (C) 1995-2026 Jean-loup Gailly and Mark Adler. The upstream source is unmodified; this fork adds Zig packaging and bindings. See [NOTICE.md](NOTICE.md) and [FORK-LICENSE.md](FORK-LICENSE.md) for the file inventory and fork terms.
+
+The upstream grant from `src/LICENSE` is reproduced here:
+
+```text
+Copyright notice:
+
+ (C) 1995-2026 Jean-loup Gailly and Mark Adler
+
+  This software is provided 'as-is', without any express or implied
+  warranty.  In no event will the authors be held liable for any damages
+  arising from the use of this software.
+
+  Permission is granted to anyone to use this software for any purpose,
+  including commercial applications, and to alter it and redistribute it
+  freely, subject to the following restrictions:
+
+  1. The origin of this software must not be misrepresented; you must not
+     claim that you wrote the original software. If you use this software
+     in a product, an acknowledgment in the product documentation would be
+     appreciated but is not required.
+  2. Altered source versions must be plainly marked as such, and must not be
+     misrepresented as being the original software.
+  3. This notice may not be removed or altered from any source distribution.
+
+  Jean-loup Gailly        Mark Adler
+  jloup@gzip.org          madler@alumni.caltech.edu
+```

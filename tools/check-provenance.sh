@@ -192,17 +192,15 @@ while IFS= read -r path; do
 done <<< "$declared_paths"
 echo "all $(printf '%s\n' "$declared_paths" | grep -c .) paths build.zig.zon .paths names exist"
 
-# The two lock files belong to the driver, and .paths deliberately names
-# neither while both are absent. This says so out loud rather than leaving the
-# omission to be read as an oversight, and it is the check that keeps the
-# manifest honest when the driver does write one.
+# Lock files belong to the driver. Once one exists, include it in the package
+# rather than silently omitting the dependency pins from the published source.
 for lock in flake.lock devenv.lock; do
     if [ -e "$lock" ]; then
         printf '%s\n' "$declared_paths" | grep -qx "$lock" ||
             fail "$lock now exists, so build.zig.zon .paths must name it in the same change"
     fi
 done
-echo "neither lock file exists, and .paths names neither"
+echo "all present lock files are included in .paths"
 
 # 4f. The fixture provenance record is itself cited by three source files, so a
 #     deletion would leave those citations dangling and the fixture set

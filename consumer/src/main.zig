@@ -3,6 +3,7 @@
 
 //! Exercises the published `zlib` module from a separate package, including translated headers and artifact.
 //! Checks use RFC layouts, zlib 1.2.13 fixture checksums, and facade-versus-raw symbol agreement.
+//! Fixture producer versions and digests are recorded in fixtures/PROVENANCE.md.
 //! Supports linked and runtime-loaded builds; runtime mode requires an explicit provider.
 
 const std = @import("std");

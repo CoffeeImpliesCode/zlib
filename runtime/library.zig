@@ -119,7 +119,7 @@ pub fn Config(comptime dispatch: type) type {
             }
 
             // Only debug and WINAPI configuration bits are observable here.
-            const flags: u32 = @truncate(@as(u64, @bitCast(dst.zlibCompileFlags())));
+            const flags: u32 = @truncate(dst.zlibCompileFlags());
             if ((flags & flag_debug) != 0) {
                 std.debug.print(
                     "zlib: provider reports compile flag bit 8 (ZLIB_DEBUG, " ++

@@ -1,5 +1,8 @@
 # Changelog
 
+- Restore Forgejo verification with Zig 0.17.0, and retain the upstream copyright notice and licence in `README.md`.
+- Read runtime provider compile flags directly from `c_ulong`, including targets where it has 32 bits.
+- Include the tracked `flake.lock` in the published package and align the restored CI checks with `libzlib` artifact names, relocatable pkg-config paths, and runtime test provider configuration.
 - Pass the source-length pointer to `uncompress2` during runtime provider validation, fixing loads with static or shared artifact linkage.
 - Split runtime symbol lists on commas and ASCII whitespace; add search-prefix library directories to system-header translation for static and shared linkage.
 - Share runtime header modules, compile runtime tests/smoke/consumer in `check`, and bind system consumers to installed `libzlib` with forwarded search prefixes and matching pkg-config metadata.
